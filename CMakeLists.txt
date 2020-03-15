@@ -1,3 +1,10 @@
+
+cmake_minimum_required(VERSION 3.12)
+
+project(Camtimers)
+
+find_package(MPI REQUIRED)
+
 add_library(timers
   f_wrappers.c
   GPTLget_memusage.c
