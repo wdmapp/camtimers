@@ -1,0 +1,209 @@
+#!/bin/csh
+# theta post-aprun script: 
+#  ./post_aprun.theta with the following optional argument keyword/value pairs, in any order
+#   -case <case name>
+#   -stdout <standard output from application>
+#   -jobid <should be same as $COBALT_JOBID>
+#   -user <should be same as $LOGNAME>
+#   -subdir <directory from which job script was submitted>
+#   -rundir <run directory>
+#   -save <TRUE|true|anything else>
+#   -archive <performance archive root directory>
+#   -sampling <sampling interval in seconds>
+#   -sample_script <script used to sample system status>
+#   -outpe_num <profile_outpe_num setting>
+#   -flush_count <mon_flush_count setting>
+#   -nprocess <number of MPI processes>  (not used at the current time)
+#   -est_remaining <TRUE|true|anything else>
+# NOTE: must be consistent with arguments in pre_aprun.edison call, as variables set in pre_aprun.edison are not 'inherited' by post_aprun.edison
+
+set app_jobid = $COBALT_JOBID
+
+set case = `qstat -l --header JobName $app_jobid | grep -F JobName | sed 's/ *JobName *: *\([[:graph:]]*\) */\1/' `
+if ("$case" == 'N/A') then
+  set case = $app_jobid
+endif
+set app_stdout = $app_jobid.output
+
+set user = $LOGNAME
+set sub_dir = $PWD
+set run_dir = $PWD
+set save_timing = 'TRUE'
+set save_timing_dir = '/projects/TokamakITER'
+set sample_interval = 900
+set syslog_script = '/projects/TokamakITER/Software/camtimers/DEFAULT/DEFAULT/bin/xgc_syslog.theta'
+set outpe_num = 1
+set flush_count = 12
+set n_process = 0
+set est_remaining = 'TRUE'
+set i = 1
+while ($i < $#argv)
+  if    ("X$argv[$i]" == 'X-case') then
+    @ i = $i + 1
+    set case = $argv[$i]
+  else if ("X$argv[$i]" == 'X-stdout') then
+    @ i = $i + 1
+    set app_stdout = $argv[$i]
+  else if ("X$argv[$i]" == 'X-jobid') then
+    @ i = $i + 1
+    set app_jobid = $argv[$i]
+  else if ("X$argv[$i]" == 'X-user') then
+    @ i = $i + 1
+    set user = $argv[$i]
+  else if ("X$argv[$i]" == 'X-subdir') then
+    @ i = $i + 1
+    set sub_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-rundir') then
+    @ i = $i + 1
+    set run_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-save') then
+    @ i = $i + 1
+    set save_timing = $argv[$i]
+  else if ("X$argv[$i]" == 'X-archive') then
+    @ i = $i + 1
+    set save_timing_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-sampling') then
+    @ i = $i + 1
+    set sample_interval = $argv[$i]
+  else if ("X$argv[$i]" == 'X-sample_script') then
+    @ i = $i + 1
+    set syslog_script = $argv[$i]
+  else if ("X$argv[$i]" == 'X-outpe_num') then
+    @ i = $i + 1
+    set outpe_num = $argv[$i]
+  else if ("X$argv[$i]" == 'X-flush_count') then
+    @ i = $i + 1
+    set flush_count = $argv[$i]
+  else if ("X$argv[$i]" == 'X-nprocess') then
+    @ i = $i + 1
+    set n_process = $argv[$i]
+  else if ("X$argv[$i]" == 'X-est_remaining') then
+    @ i = $i + 1
+    set est_remaining = $argv[$i]
+  endif
+  @ i = $i + 1
+end
+
+echo "`date` -- APPLICATION EXECUTION HAS FINISHED" 
+
+set sdate = `date +"%Y-%m-%d %H:%M:%S"`
+echo "aprun ended $sdate" >>& CaseStatus.$app_jobid
+
+cd $run_dir
+
+if (-e xgc_mpi_init) then
+  /bin/rm -f xgc_mpi_init
+endif
+
+if (-e Walltime.Remaining) then
+  /bin/rm -f Walltime.Remaining
+endif
+
+set syslog_jobid = 0
+if (-e syslog_jobid.$app_jobid) then
+  set syslog_jobid = `cat syslog_jobid.$app_jobid`
+  /bin/rm -f syslog_jobid.$app_jobid
+endif
+if ($syslog_jobid != 0) then
+  kill $syslog_jobid
+endif
+
+if (-e perf_in) then
+  /bin/rm -f perf_in
+endif
+if (-e perf_in.$app_jobid) then
+  mv perf_in.$app_jobid perf_in
+endif
+
+if (-e mon_in) then
+  /bin/rm -f mon_in
+endif
+if (-e mon_in.$app_jobid) then
+  mv mon_in.$app_jobid mon_in
+endif
+
+set lid = `date +"%y%m%d-%H%M%S"`
+mv timing timing.$app_jobid.$lid
+tar cf timing.$app_jobid.$lid.tar timing.$app_jobid.$lid
+gzip timing.$app_jobid.$lid.tar
+/bin/rm -rf timing.$app_jobid.$lid
+
+if (-e log_summary_out) then
+  mv log_summary_out log_summary_out.$app_jobid
+else
+  touch log_summary_out.$app_jobid
+endif
+chmod g+w  log_summary_out.$app_jobid
+chmod a+rX log_summary_out.$app_jobid
+
+cd $sub_dir
+
+if (($save_timing == 'TRUE') || ($save_timing == 'true')) then
+
+  if (-d $save_timing_dir) then
+
+    cd $save_timing_dir
+
+    if !(-d performance_archive) then
+      mkdir performance_archive
+      chmod 777 performance_archive
+      chmod a+s performance_archive
+    endif
+    cd performance_archive
+    if !(-d $user) then
+      mkdir $user
+      chmod g+w  $user
+      chmod a+rX $user
+    endif
+    cd $user
+    if !(-d $case) then
+      mkdir $case
+      chmod g+w  $case
+      chmod a+rX $case
+    endif
+    cd $case
+    if !(-d $app_jobid) then
+      mkdir $app_jobid
+      chmod g+w  $app_jobid
+      chmod a+rX $app_jobid
+    endif
+    cd $app_jobid
+    if !(-d $lid) then
+      mkdir $lid
+      chmod g+w  $lid
+      chmod a+rX $lid
+    endif
+
+    mv checkpoints $lid/checkpoints.$lid
+
+    cd $lid
+    mv checkpoints.$lid/input.$app_jobid input.$app_jobid.$lid
+
+    cp --preserve=timestamps $run_dir/$app_stdout $app_stdout.$app_jobid.$lid
+    cp --preserve=timestamps $run_dir/CaseStatus.$app_jobid CaseStatus.$app_jobid.$lid
+    cp --preserve=timestamps $run_dir/timing.$app_jobid.$lid.tar.gz timing.$app_jobid.$lid.tar.gz
+    cp --preserve=timestamps $run_dir/log_summary_out.$app_jobid log_summary_out.$app_jobid.$lid
+    if (-e $run_dir/TASKMAP_Color0.txt) then
+       cp --preserve=timestamps $run_dir/TASKMAP_Color0.txt TASKMAP_Color0.txt.$lid
+    endif
+    if (-e $run_dir/TASKMAP_Color1.txt) then
+       cp --preserve=timestamps $run_dir/TASKMAP_Color1.txt TASKMAP_Color1.txt.$lid
+    endif
+    if (-e $run_dir/TASKMAP_Color2.txt) then
+       cp --preserve=timestamps $run_dir/TASKMAP_Color2.txt TASKMAP_Color2.txt.$lid
+    endif
+
+    if !(-e $app_jobid.output.$lid) then
+       cp --preserve=timestamps $sub_dir/$app_jobid.output $app_jobid.output.$lid
+    endif
+    cp --preserve=timestamps $sub_dir/$app_jobid.error $app_jobid.error.$lid
+    cp --preserve=timestamps $sub_dir/$app_jobid.cobaltlog $app_jobid.cobaltlog.$lid
+
+    chmod -R g+w  *
+    chmod -R a+rX *
+    gzip -r *
+
+  endif
+
+endif
+

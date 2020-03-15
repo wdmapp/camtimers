@@ -1,0 +1,89 @@
+#!/bin/csh
+# XGC mira syslog script: 
+#  xgc_syslog.mira <sampling interval (in seconds)> <number of processes> <job identifier> <run directory> <output file name> <timing directory> <output directory> <estimate remaining time: 0/1>
+
+set sample_interval = $1
+set nprocess = $2
+set jid = $3
+set run = $4
+set outfile = $5
+set timing = $6
+set dir = $7
+set est_remaining = $8
+
+# wait until job mapping information is output before saving output file
+while (! -e $run/$outfile)
+  sleep 10
+end
+set TimeRemaining = `qstat -lf $jid | grep -F TimeRemaining | sed 's/^ *TimeRemaining *: *\([0-9]*:[0-9]*:[0-9]*\) */\1/' `
+set rem_hours     = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\1/' `
+set rem_mins      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\2/' `
+set rem_secs      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\3/' `
+if ("X$rem_hours" == "X") set rem_hours = 0
+if ("X$rem_mins" == "X")  set rem_mins  = 0
+if ("X$rem_secs" == "X")  set rem_secs  = 0
+@ remaining = 3600 * $rem_hours + 60 * $rem_mins + $rem_secs
+if (-d $dir) then
+  /bin/cp --preserve=timestamps $run/$outfile $dir/$outfile.$jid.$remaining
+endif
+
+if ($est_remaining > 0) then
+# (try to) wait until application code has initialized MPI before recording 
+# remaining time for use in early termination logic
+  set sleep_counter = 0
+  @ remaining_tenth = $remaining / 10
+  while (! -e $run/xgc_mpi_init)
+    sleep 10
+    @ sleep_counter = $sleep_counter + 10
+    if ($sleep_counter > $remaining_tenth) then
+      break
+    endif
+  end
+
+  if (-e $run/xgc_mpi_init) then
+    set src = 4
+  else
+    set src = 3
+  endif
+
+  set TimeRemaining = `qstat -lf $jid | grep -F TimeRemaining | sed 's/^ *TimeRemaining *: *\([0-9]*:[0-9]*:[0-9]*\) */\1/' `
+  set rem_hours     = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\1/' `
+  set rem_mins      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\2/' `
+  set rem_secs      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\3/' `
+  if ("X$rem_hours" == "X") set rem_hours = 0
+  if ("X$rem_mins" == "X")  set rem_mins  = 0
+  if ("X$rem_secs" == "X")  set rem_secs  = 0
+  @ remaining = 3600 * $rem_hours + 60 * $rem_mins + $rem_secs
+  cat > $run/Walltime.Remaining << EOF1
+&rem_param
+rem_walltime = $remaining
+rem_walltime_src = $src
+/
+
+EOF1
+endif
+
+if ($sample_interval > 0) then
+  while (1)
+    echo "Wallclock time remaining: $remaining" >> $dir/$outfile.$jid.step
+    grep -Fa "step," $run/$outfile | tail -n 6 >> $dir/$outfile.$jid.step
+#    tail -n 10 $run/$outfile > $dir/$outfile.$jid.step.$remaining
+    /bin/cp --preserve=timestamps -u $timing/* $dir
+    chmod -R a+rX $dir
+    chmod -R g+w $dir
+    sleep $sample_interval
+    set TimeRemaining = `qstat -lf $jid | grep -F TimeRemaining | sed 's/^ *TimeRemaining *: *\([0-9]*:[0-9]*:[0-9]*\) */\1/' `
+    set rem_hours     = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\1/' `
+    set rem_mins      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\2/' `
+    set rem_secs      = `echo $TimeRemaining | sed 's/^0*\([0-9]*\):0*\([0-9]*\):0*\([0-9]*\)/\3/' `
+    if ("X$rem_hours" == "X") set rem_hours = 0
+    if ("X$rem_mins" == "X")  set rem_mins  = 0
+    if ("X$rem_secs" == "X")  set rem_secs  = 0
+    @ remaining = 3600 * $rem_hours + 60 * $rem_mins + $rem_secs
+  end
+endif
+
+if (-e $run/syslog_jobid.$jid) then
+  /bin/rm -f $run/syslog_jobid.$jid
+endif
+

@@ -1,0 +1,239 @@
+#!/bin/csh
+# summit pre-jsrun script: 
+#  ./pre_jsrun.summit with the following optional argument keyword/value pairs, in any order
+#   -case <case name>
+#   -stdout <standard output from application>
+#   -jobid <should be same as $LSB_JOBID>
+#   -user <should be same as $LOGNAME>
+#   -subdir <directory from which job script was submitted>
+#   -rundir <run directory>
+#   -save <TRUE|true|anything else>
+#   -archive <performance archive root directory>
+#   -sampling <sampling interval in seconds>
+#   -sample_script <script used to sample system status>
+#   -outpe_num <profile_outpe_num setting>
+#   -flush_count <mon_flush_count setting>
+#   -nprocess <number of MPI processes>
+#   -est_remaining <TRUE|true|anything else>
+
+set case = $LSB_JOBNAME
+set app_stdout = 'xgc2.out'
+set app_jobid = $LSB_JOBID
+set user = $LOGNAME
+set sub_dir = $LS_SUBCWD
+set run_dir = $LSB_OUTDIR
+set save_timing = 'TRUE'
+set save_timing_dir = '/gpfs/alpine/proj-shared/phy122'
+set sample_interval = 900
+set syslog_script = '/ccs/proj/phy122/camtimers/summit/xgc_syslog.summit'
+set outpe_num = 1
+set flush_count = 12
+set n_process = 0
+set est_remaining = 'FALSE'
+set i = 1
+while ($i < $#argv)
+  if    ("X$argv[$i]" == 'X-case') then
+    @ i = $i + 1
+    set case = $argv[$i]
+  else if ("X$argv[$i]" == 'X-stdout') then
+    @ i = $i + 1
+    set app_stdout = $argv[$i]
+  else if ("X$argv[$i]" == 'X-jobid') then
+    @ i = $i + 1
+    set app_jobid = $argv[$i]
+  else if ("X$argv[$i]" == 'X-user') then
+    @ i = $i + 1
+    set user = $argv[$i]
+  else if ("X$argv[$i]" == 'X-subdir') then
+    @ i = $i + 1
+    set sub_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-rundir') then
+    @ i = $i + 1
+    set run_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-save') then
+    @ i = $i + 1
+    set save_timing = $argv[$i]
+  else if ("X$argv[$i]" == 'X-archive') then
+    @ i = $i + 1
+    set save_timing_dir = $argv[$i]
+  else if ("X$argv[$i]" == 'X-sampling') then
+    @ i = $i + 1
+    set sample_interval = $argv[$i]
+  else if ("X$argv[$i]" == 'X-sample_script') then
+    @ i = $i + 1
+    set syslog_script = $argv[$i]
+  else if ("X$argv[$i]" == 'X-outpe_num') then
+    @ i = $i + 1
+    set outpe_num = $argv[$i]
+  else if ("X$argv[$i]" == 'X-flush_count') then
+    @ i = $i + 1
+    set flush_count = $argv[$i]
+  else if ("X$argv[$i]" == 'X-nprocess') then
+    @ i = $i + 1
+    set n_process = $argv[$i]
+  else if ("X$argv[$i]" == 'X-est_remaining') then
+    @ i = $i + 1
+    set est_remaining = $argv[$i]
+  endif
+  @ i = $i + 1
+end
+
+if (($save_timing == 'TRUE') || ($save_timing == 'true')) then
+
+  if (-d $save_timing_dir) then
+
+    cd $save_timing_dir
+
+    if !(-d performance_archive) then
+      mkdir performance_archive
+      chmod 777 performance_archive
+      chmod a+s performance_archive
+    endif
+    cd performance_archive
+    if !(-d $user) then
+      mkdir $user
+      chmod g+w  $user
+      chmod a+rX $user
+    endif
+    cd $user
+    if !(-d $case) then
+      mkdir $case
+      chmod g+w  $case
+      chmod a+rX $case
+    endif
+    cd $case
+    if !(-d $app_jobid) then
+      mkdir $app_jobid
+      chmod g+w  $app_jobid
+      chmod a+rX $app_jobid
+    endif
+    cd $app_jobid
+
+    if !(-e job_start) then
+      touch job_start
+      bjobs -u all > bjobsu_all.$app_jobid
+      bjobs -r -u all -o 'jobid slots exec_host' > bjobsru_allo.$app_jobid
+      bjobs -l -UF $app_jobid > bjobslUF_jobid.$app_jobid
+      chmod g+w  *
+      chmod a+rX *
+
+      gzip bjobsu_all.$app_jobid bjobsru_allo.$app_jobid bjobslUF_jobid.$app_jobid
+    endif
+
+    if !(-d checkpoints) then
+      mkdir checkpoints
+    endif
+    cp --preserve=timestamps $run_dir/input checkpoints/input.$app_jobid
+    chmod -R g+w  checkpoints
+    chmod -R a+rX checkpoints
+
+  endif
+
+endif
+
+cd $run_dir
+
+set string = `bjobs -o 'submit_time' -noheader $app_jobid`
+echo "job $app_jobid submitted: $string" >>& CaseStatus.$app_jobid.X
+
+set string = `bjobs -o 'start_time' -noheader $app_jobid`
+echo "job $app_jobid started: $string" >>& CaseStatus.$app_jobid.X
+
+if ($n_process < 1) then
+  set n_slots = `bjobs -o 'slots' -noheader $app_jobid | sed 's/[^0-9]*//g' `
+  @ n_cores = $n_slots - 1
+  set n_process = $n_cores
+  if ($?OMP_NUM_THREADS) then
+    set n_thread = `echo $OMP_NUM_THREADS | sed 's/[^0-9]*//g' `
+    if (${%n_thread} == 0) then
+      set n_thread = 1
+    endif
+    # with SMT2 or SMT4, this could be an underestimate by a factor of 2 or 4
+    @ n_process = $n_cores / $n_thread
+  endif
+  if ($n_process < 1) then
+    set n_process = 1
+  endif
+endif
+
+if (-e xgc_mpi_init) then
+  /bin/rm -f xgc_mpi_init
+endif
+
+if (-e $app_stdout) then
+  /bin/rm -f $app_stdout
+endif
+
+if !(-d timing) then
+  mkdir timing
+endif
+
+if !(-d timing/checkpoints) then
+  mkdir timing/checkpoints
+endif
+
+chmod -R g+w  timing
+chmod -R a+rX timing
+
+if (($est_remaining == 'TRUE') || ($est_remaining == 'true')) then
+  set est_rem = 1
+else
+  set est_rem = 0
+endif
+
+csh $syslog_script $sample_interval $n_process $app_jobid $run_dir $app_stdout $run_dir/timing/checkpoints $save_timing_dir/performance_archive/$user/$case/$app_jobid/checkpoints $est_rem &
+set syslog_jobid = $!
+
+cat >> syslog_jobid.$app_jobid.X << EOF1
+$syslog_jobid
+EOF1
+
+if (-e perf_in) then
+  mv perf_in perf_in.$app_jobid.X
+endif
+
+cat >> perf_in << EOF1
+&prof_inparam
+profile_papi_enable=.true.
+profile_single_file = .false.
+profile_global_stats = .true.
+profile_outpe_num = $outpe_num
+/
+&papi_inparam
+/
+
+EOF1
+
+if (-e mon_in) then
+  mv mon_in mon_in.$app_jobid.X
+endif
+
+cat >> mon_in << EOF1
+&mon_param
+mon_flush_count = $flush_count
+/
+
+EOF1
+
+set sdate = `date +"%Y-%m-%d %H:%M:%S"`
+echo "jsrun started $sdate" >>& CaseStatus.$app_jobid.X
+echo "`date` -- APPLICATION EXECUTION BEGINS HERE" 
+
+if ($est_rem > 0) then
+set time_left = `bjobs -noheader -hms -o "time_left" $app_jobid`
+set remaining_hours = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\1/' `
+set remaining_mins  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\2/' `
+set remaining_secs  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\3/' `
+if ("X$remaining_hours" == "X") set remaining_hours = 0
+if ("X$remaining_mins" == "X")  set remaining_mins  = 0
+if ("X$remaining_secs" == "X")  set remaining_secs  = 0
+@ remaining = 3600 * $remaining_hours + 60 * $remaining_mins + $remaining_secs
+cat > $run_dir/Walltime.Remaining << EOF1
+&rem_param
+rem_walltime = $remaining
+rem_walltime_src = 2
+/
+
+EOF1
+endif
+

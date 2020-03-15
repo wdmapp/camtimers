@@ -1,0 +1,108 @@
+#!/bin/csh
+# XGC summit syslog script: 
+#  xgc_syslog.summit <sampling interval (in seconds)> <number of processes> <job identifier> <run directory> <output file name> <timing directory> <output directory> <estimate remaining time: 0/1>
+
+set sample_interval = $1
+set nprocess = $2
+set jid = $3
+set run = $4
+set outfile = $5
+set timing = $6
+set dir = $7
+set est_remaining = $8
+
+# Wait until some model output appears before saving output file.
+# Target length was determined empirically, so it may need to be adjusted in the future.
+# set nexec_host = `bjobs -o 'nexec_host' -noheader $jid | sed 's/[^0-9]*//g' `
+# @ target_lines = 250 + $nexec_host
+@ target_lines = 250
+while (! -e $run/$outfile)
+  sleep 30
+end
+set outlth = `wc \-l $run/$outfile | sed 's/ *\([0-9]*\) *.*/\1/' `
+while ($outlth < $target_lines)
+  sleep 20
+  set outlth = `wc \-l $run/$outfile | sed 's/ *\([0-9]*\) *.*/\1/' `
+end
+
+set time_left = `bjobs -noheader -hms -o "time_left" $jid`
+set remaining_hours = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\1/' `
+set remaining_mins  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\2/' `
+set remaining_secs  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\3/' `
+if ("X$remaining_hours" == "X") set remaining_hours = 0
+if ("X$remaining_mins" == "X")  set remaining_mins  = 0
+if ("X$remaining_secs" == "X")  set remaining_secs  = 0
+@ remaining = 3600 * $remaining_hours + 60 * $remaining_mins + $remaining_secs
+if (-d $dir) then
+  /bin/cp --preserve=timestamps $run/$outfile $dir/$outfile.$jid.$remaining
+endif
+
+if ($est_remaining > 0) then
+# (try to) wait until application code has initialized MPI before recording 
+# remaining time for use in early termination logic
+  set sleep_counter = 0
+  @ remaining_tenth = $remaining / 10
+  while (! -e $run/xgc_mpi_init)
+    sleep 10
+    @ sleep_counter = $sleep_counter + 10
+    if ($sleep_counter > $remaining_tenth) then
+      break
+    endif
+  end
+
+  if (-e $run/xgc_mpi_init) then
+    set src = 4
+  else
+    set src = 3
+  endif
+
+  set time_left = `bjobs -noheader -hms -o "time_left" $jid`
+  set remaining_hours = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\1/' `
+  set remaining_mins  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\2/' `
+  set remaining_secs  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\3/' `
+  if ("X$remaining_hours" == "X") set remaining_hours = 0
+  if ("X$remaining_mins" == "X")  set remaining_mins  = 0
+  if ("X$remaining_secs" == "X")  set remaining_secs  = 0
+  @ remaining = 3600 * $remaining_hours + 60 * $remaining_mins + $remaining_secs
+  cat > $run/Walltime.Remaining << EOF1
+&rem_param
+rem_walltime = $remaining
+rem_walltime_src = $src
+/
+
+EOF1
+endif
+
+if ($sample_interval > 0) then
+  while ($remaining > 0)
+    echo "Wallclock time remaining: $remaining" >> $dir/$outfile.$jid.step
+    grep -Fa "step," $run/$outfile | tail -n 6 >> $dir/$outfile.$jid.step
+##    grep -a -i "step,ratio" $run/$outfile | tail > $dir/$outfile.$jid.step.$remaining
+#    tail -n 10 $run/$outfile > $dir/$outfile.$jid.step.$remaining
+    /bin/cp --preserve=timestamps -u $timing/* $dir
+    bjobs -r -u all > $dir/bjobsru_all.$jid.$remaining
+    bjobs -r -u all -o 'jobid slots exec_host' > $dir/bjobsru_allo.$jid.$remaining
+    chmod -R a+rX $dir
+    chmod -R g+w $dir
+    # sleep $sample_interval
+    set sleep_remaining = $sample_interval
+    while ($sleep_remaining > 120)
+     sleep 120
+     @ sleep_remaining = $sleep_remaining - 120
+    end
+    sleep $sleep_remaining
+    set time_left = `bjobs -noheader -hms -o "time_left" $jid`
+    set remaining_hours = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\1/' `
+    set remaining_mins  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\2/' `
+    set remaining_secs  = `echo $time_left | sed 's/^\([0-9]*\):\([0-9]*\):\([0-9]*\) *[XLE]/\3/' `
+    if ("X$remaining_hours" == "X") set remaining_hours = 0
+    if ("X$remaining_mins" == "X")  set remaining_mins  = 0
+    if ("X$remaining_secs" == "X")  set remaining_secs  = 0
+    @ remaining = 3600 * $remaining_hours + 60 * $remaining_mins + $remaining_secs
+  end
+endif
+
+if (-e $run/syslog_jobid.$jid.X) then
+  /bin/rm -f $run/syslog_jobid.$jid.X
+endif
+
