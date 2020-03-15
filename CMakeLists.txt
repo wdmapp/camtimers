@@ -19,6 +19,8 @@ target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE)
 target_link_libraries(timers PUBLIC MPI::MPI_C global_settings)
 target_include_directories(timers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+install(TARGETS timers)
+
 # provide under CAMTIMERS::CAMTIMERS name
 add_library(CAMTIMERS::CAMTIMERS INTERFACE IMPORTED GLOBAL)
 target_link_libraries(CAMTIMERS::CAMTIMERS INTERFACE timers)
