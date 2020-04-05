@@ -2,8 +2,30 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(Camtimers)
+ENABLE_LANGUAGE(C CXX Fortran)
 
 find_package(MPI REQUIRED)
+
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+# Update submodules as needed
+    option(GIT_SUBMODULE "Check submodules during build" ON)
+    if(GIT_SUBMODULE)
+        message(STATUS "Submodule update")
+        execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        RESULT_VARIABLE GIT_SUBMOD_RESULT)
+        if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+            message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+        endif()
+    endif()
+endif()
+
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/perfstubs/CMakeLists.txt")
+    message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
+
+add_subdirectory(perfstubs)
 
 add_library(timers
   f_wrappers.c
@@ -15,12 +37,14 @@ add_library(timers
   perf_mod.F90
   perf_utils.F90)
 
-target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE)
-target_link_libraries(timers PUBLIC MPI::MPI_C global_settings)
+add_dependencies(timers perfstubs)
+
+target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE HAVE_MPI PERFSTUBS_USE_TIMERS)
+target_link_libraries(timers PUBLIC MPI::MPI_C global_settings perfstubs)
 target_include_directories(timers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS timers)
 
 # provide under CAMTIMERS::CAMTIMERS name
 add_library(CAMTIMERS::CAMTIMERS INTERFACE IMPORTED GLOBAL)
-target_link_libraries(CAMTIMERS::CAMTIMERS INTERFACE timers)
+target_link_libraries(CAMTIMERS::CAMTIMERS INTERFACE timers perfstubs)

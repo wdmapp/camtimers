@@ -5,8 +5,8 @@ CPPDEF    := -DLINUX -DFORTRANUNDERSCORE -DHAVE_MPI
 
 FC := mpifort -mp
 CC := mpicc -mp
-FFLAGS    := -i4 -Mdalign -Mextend -byteswapio $(CPPDEF)
-CFLAGS    := $(CPPDEF)
+FFLAGS    := -i4 -Mdalign -Mextend -byteswapio $(CPPDEF) -Iperfstubs/ps_build/include -O3
+CFLAGS    := $(CPPDEF) -Iperfstubs/ps_build/include -O3
 FREEFLAGS := -Mfree
 
 .F90.o:
@@ -21,7 +21,8 @@ FREEFLAGS := -Mfree
 #------------------------------------------------------------------------
 
 OBJS := GPTLget_memusage.o GPTLprint_memusage.o GPTLutil.o f_wrappers.o \
-        gptl.o gptl_papi.o perf_utils.o perf_mod.o
+        gptl.o gptl_papi.o perf_utils.o perf_mod.o \
+		perfstubs/ps_build/obj/timer_dynamic.o
 RM   := rm
 AR   := ar
 ARFLAGS := -rc
@@ -29,10 +30,17 @@ RANLIB  := ranlib
 
 all: libtimers.a
 
-libtimers.a : $(OBJS)
+perfstubs:
+	git clone https://github.com/khuck/perfstubs.git
+
+perfstubs/ps_build/lib/timer_dynamic.o: perfstubs
+	CC='$(CC)' CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)' $(MAKE) -C perfstubs
+
+libtimers.a : perfstubs/ps_build/lib/timer_dynamic.o $(OBJS)
 	$(AR) $(ARFLAGS) $@ $(OBJS)
 	$(RANLIB) $@
 
 clean:
 	$(RM) -f *.o *.mod *.a
+	$(MAKE) -C perfstubs clean
 
