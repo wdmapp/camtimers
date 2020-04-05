@@ -6,6 +6,8 @@ ENABLE_LANGUAGE(C CXX Fortran)
 
 find_package(MPI REQUIRED)
 
+# Get the PerfStubs source, and add it as a subdirectory
+
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
 # Update submodules as needed
