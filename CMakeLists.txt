@@ -5,6 +5,7 @@ project(Camtimers)
 ENABLE_LANGUAGE(C CXX Fortran)
 
 find_package(MPI REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # Get the PerfStubs source, and add it as a subdirectory
 
@@ -46,8 +47,10 @@ add_library(timers
 
 add_dependencies(timers perfstubs)
 
-target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE HAVE_MPI PERFSTUBS_USE_TIMERS)
+target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE HAVE_MPI LINUX PERFSTUBS_USE_TIMERS)
 target_link_libraries(timers PUBLIC MPI::MPI_C global_settings perfstubs)
+target_link_libraries(timers PRIVATE OpenMP::OpenMP_C)
+target_link_libraries(timers PRIVATE OpenMP::OpenMP_Fortran)
 target_include_directories(timers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS timers)
