@@ -3882,7 +3882,7 @@ int GPTLpr_summary_file (int comm,
 
   char name[MAX_CHARS+1];                   /* timer name requested by master */
 
-  if (((int) comm) == 0)
+  if ((comm) == 0)
     comm = MPI_COMM_WORLD;
 
   if ((ret = MPI_Comm_rank (comm, &iam)) != MPI_SUCCESS)
