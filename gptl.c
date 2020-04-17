@@ -34,6 +34,7 @@
 
 #include "private.h"
 #include "gptl.h"
+#include "perfstubs_api/timer.h"
 
 static Timer **timers = 0;           /* linked list of timers */
 static Timer **last = 0;             /* last element in list */
@@ -346,7 +347,7 @@ int GPTLsetoption (const int option,  /* option */
       printf ("%s: boolean dopr_quotes = %d\n", thisfunc, val);
     return 0;
   case GPTLprint_mode:
-    print_mode = (PRMode) val; 
+    print_mode = (PRMode) val;
     if (verbose)
       printf ("%s: print_mode = %s\n", thisfunc, modestr (print_mode));
     return 0;
@@ -547,6 +548,7 @@ int GPTLinitialize (void)
   }
 
   initialized = true;
+  PERFSTUBS_INITIALIZE();
   return 0;
 }
 
@@ -566,6 +568,8 @@ int GPTLfinalize (void)
 
   if ( ! initialized)
     return GPTLerror ("%s: initialization was not completed\n", thisfunc);
+
+  PERFSTUBS_FINALIZE();
 
   for (t = 0; t < maxthreads; ++t) {
     for (n = 0; n < tablesize; ++n) {
@@ -678,10 +682,10 @@ int GPTLprefix_set (const char *prefixname)      /* prefix string */
   /*
   ** Note: if in a parallel region with only one active thread, e.g.
   ** thread 0, this will NOT be identified as a serial regions.
-  ** If want GPTLprefix_set to apply to all threads, will need to 
-  ** "fire up" the idle threads in some sort of parallel loop. 
+  ** If want GPTLprefix_set to apply to all threads, will need to
+  ** "fire up" the idle threads in some sort of parallel loop.
   ** It is not safe to just test omp_in_parallel and
-  ** omp_get_thread_num == 1 unless add a thread barrier, and this 
+  ** omp_get_thread_num == 1 unless add a thread barrier, and this
   ** barrier would apply to all calls, so would be a performance bottleneck.
   */
 
@@ -689,7 +693,7 @@ int GPTLprefix_set (const char *prefixname)      /* prefix string */
 
     prefix_len_nt = len_prefix;
     ptr_prefix = prefix_nt;
-    
+
   } else {
 
     if ((t = get_thread_num ()) < 0)
@@ -706,7 +710,7 @@ int GPTLprefix_set (const char *prefixname)      /* prefix string */
 }
 
 /*
-** GPTLprefix_setf: define prefix for subsequent timer names when 
+** GPTLprefix_setf: define prefix for subsequent timer names when
 **                  the string may not be null terminated
 **
 ** Input arguments:
@@ -743,10 +747,10 @@ int GPTLprefix_setf (const char *prefixname, const int prefixlen)  /* prefix str
   /*
   ** Note: if in a parallel region with only one active thread, e.g.
   ** thread 0, this will NOT be identified as a serial regions.
-  ** If want GPTLprefix_setf to apply to all threads, will need to 
-  ** "fire up" the idle threads in some sort of parallel loop. 
+  ** If want GPTLprefix_setf to apply to all threads, will need to
+  ** "fire up" the idle threads in some sort of parallel loop.
   ** It is not safe to just test omp_in_parallel and
-  ** omp_get_thread_num == 1 unless add a thread barrier, and this 
+  ** omp_get_thread_num == 1 unless add a thread barrier, and this
   ** barrier would apply to all calls, so would be a performance bottleneck.
   */
 
@@ -754,7 +758,7 @@ int GPTLprefix_setf (const char *prefixname, const int prefixlen)  /* prefix str
 
     prefix_len_nt = len_prefix;
     ptr_prefix = prefix_nt;
-    
+
   } else {
 
     if ((t = get_thread_num ()) < 0)
@@ -803,10 +807,10 @@ int GPTLprefix_unset ()
   /*
   ** Note: if in a parallel region with only one active thread, e.g.
   ** thread 0, this will NOT be identified as a serial regions.
-  ** If want GPTLprefix_unset to apply to all threads, will need to 
-  ** "fire up" the idle threads in some sort of parallel loop. 
+  ** If want GPTLprefix_unset to apply to all threads, will need to
+  ** "fire up" the idle threads in some sort of parallel loop.
   ** It is not safe to just test omp_in_parallel and
-  ** omp_get_thread_num == 1 unless add a thread barrier, and this 
+  ** omp_get_thread_num == 1 unless add a thread barrier, and this
   ** barrier would apply to all calls, so would be a performance bottleneck.
   */
 
@@ -814,7 +818,7 @@ int GPTLprefix_unset ()
 
     prefix_len_nt = 0;
     ptr_prefix = prefix_nt;
-    
+
   } else {
 
     if ((t = get_thread_num ()) < 0)
@@ -961,7 +965,7 @@ int GPTLstart (const char *timername)                  /* timer name */
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -973,6 +977,11 @@ int GPTLstart (const char *timername)                  /* timer name */
     name = timername;
     numchars = MIN (strlen (name), MAX_CHARS);
   }
+
+  /* the name isn't null terminated. :( */
+  char * dummy = strndup(name, numchars);
+  PERFSTUBS_START_STRING(dummy);
+  free(dummy);
 
   /*
   ** ptr will point to the requested timer in the current list,
@@ -1093,6 +1102,8 @@ int GPTLstart_handle (const char *name,  /* timer name */
     *handle = 0;
     return GPTLstart (name);
   }
+  // else...
+  PERFSTUBS_START_STRING(name);
 
   if (wallstats.enabled && profileovhd.enabled){
     if (t == 0){
@@ -1233,7 +1244,7 @@ int GPTLstartf (const char *timername, const int namelen)    /* timer name and l
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -1244,6 +1255,11 @@ int GPTLstartf (const char *timername, const int namelen)    /* timer name and l
     numchars = MIN (namelen, MAX_CHARS);
     name = timername;
   }
+
+  /* the name isn't null terminated. :( */
+  char * dummy = strndup(name, numchars);
+  PERFSTUBS_START_STRING(dummy);
+  free(dummy);
 
   /*
   ** ptr will point to the requested timer in the current list,
@@ -1523,7 +1539,7 @@ int GPTLstartf_virtual (const char *timername, int *tid, const int namelen)
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -1534,6 +1550,11 @@ int GPTLstartf_virtual (const char *timername, int *tid, const int namelen)
     numchars = MIN (namelen, MAX_CHARS);
     name = timername;
   }
+
+  /* the name isn't null terminated. :( */
+  char * dummy = strndup(name, numchars);
+  PERFSTUBS_START_STRING(dummy);
+  free(dummy);
 
   /*
   ** ptr will point to the requested timer in the current list,
@@ -1595,10 +1616,10 @@ int GPTLstartf_virtual (const char *timername, int *tid, const int namelen)
   /* don't record wall or cpu stats */
   wall_enabled = wallstats.enabled; wallstats.enabled = false;
   cpu_enabled  = cpustats.enabled;  cpustats.enabled = false;
-  
+
   if (update_ptr (ptr, t) != 0)
     return GPTLerror ("%s: update_ptr error\n", thisfunc);
-  
+
   wallstats.enabled = wall_enabled;
   cpustats.enabled  = cpu_enabled;
 
@@ -1620,7 +1641,7 @@ int GPTLstartf_virtual (const char *timername, int *tid, const int namelen)
 ** add_prefix: add prefix string to timer name
 **
 ** Input arguments:
-**   new_name:  new name 
+**   new_name:  new name
 **   timername: timer name
 **   namelen:   length of timer name
 **   t:         thread id
@@ -1638,7 +1659,7 @@ static int add_prefix (char *new_name, const char *timername, const int namelen,
   for (c = 0; c < numchars; c++) {
     new_name[c] = prefix_nt[c];
   }
-    
+
   /* add thread-specific prefix */
   numchars = MIN (prefix_len[t], MAX_CHARS-prefix_len_nt);
   for (c = 0; c < numchars; c++) {
@@ -1941,7 +1962,7 @@ int GPTLstop (const char *timername)         /* timer name */
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -1952,6 +1973,8 @@ int GPTLstop (const char *timername)         /* timer name */
   } else {
     name = timername;
   }
+
+  PERFSTUBS_STOP_STRING(name);
 
   if ( ! (ptr = getentry (hashtable[t], name, &indx)))
     return GPTLerror ("%s thread %d: timer for %s had not been started.\n", thisfunc, t, name);
@@ -2044,6 +2067,9 @@ int GPTLstop_handle (const char *name,     /* timer name */
     *handle = 0;
     return GPTLstop (name);
   }
+  // else...
+  PERFSTUBS_STOP_STRING(name);
+
 
   /* Get the timestamp */
 
@@ -2200,7 +2226,7 @@ int GPTLstopf (const char *timername, const int namelen) /* timer name and lengt
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -2211,6 +2237,8 @@ int GPTLstopf (const char *timername, const int namelen) /* timer name and lengt
     numchars = MIN (namelen, MAX_CHARS);
     name = timername;
   }
+
+  PERFSTUBS_STOP_STRING(name);
 
   if ( ! (ptr = getentryf (hashtable[t], name, numchars, &indx))){
     //pw    numchars = MIN (namelen, MAX_CHARS);
@@ -2316,6 +2344,10 @@ int GPTLstopf_handle (const char *name,     /* timer name */
     *handle = 0;
     return GPTLstopf (name, namelen);
   }
+  // else...
+  char * dummy = strndup(name, namelen);
+  PERFSTUBS_STOP_STRING(dummy);
+  free(dummy);
 
   /* Get the timestamp */
 
@@ -2475,7 +2507,7 @@ int GPTLstopf_virtual (const char *timername, int *tid, const int namelen)
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -2486,6 +2518,8 @@ int GPTLstopf_virtual (const char *timername, int *tid, const int namelen)
     numchars = MIN (namelen, MAX_CHARS);
     name = timername;
   }
+
+  PERFSTUBS_STOP_STRING(name);
 
   if ( ! (ptr = getentryf (hashtable[t], name, numchars, &indx))){
     //pw    numchars = MIN (namelen, MAX_CHARS);
@@ -2527,13 +2561,13 @@ int GPTLstopf_virtual (const char *timername, int *tid, const int namelen)
   /* don't record wall or cpu stats */
   wall_enabled = wallstats.enabled; wallstats.enabled = false;
   cpu_enabled  = cpustats.enabled;  cpustats.enabled = false;
-  
+
   if (update_stats (ptr, tpa, usr, sys, t) != 0)
     return GPTLerror ("%s: error from update_stats\n", thisfunc);
 
   wallstats.enabled = wall_enabled;
   cpustats.enabled  = cpu_enabled;
-  
+
   if (wallstats.enabled && profileovhd.enabled){
     if (t == 0){
       /* second caliper timestamp */
@@ -2598,7 +2632,7 @@ int GPTLrecordf (const char *timername, int *tid, int *count_incr, double *time_
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -3408,7 +3442,7 @@ int construct_tree (Timer *timerst, Method method)
   return 0;
 }
 
-/* 
+/*
 ** modestr: Return a pointer to a string that represents the mode
 **
 ** Input arguments:
@@ -3663,7 +3697,7 @@ static void printstats (const Timer *timer,
 
   /* Pad to length of longest name */
 
-  extraspace = max_name_len[t] - strlen (timer->name); 
+  extraspace = max_name_len[t] - strlen (timer->name);
   for (i = 0; i < extraspace; ++i)
     fprintf (fp, " ");
 
@@ -3848,7 +3882,7 @@ int GPTLpr_summary_file (int comm,
 
   char name[MAX_CHARS+1];                   /* timer name requested by master */
 
-  if (((int) comm) == 0)
+  if ((comm) == 0)
     comm = MPI_COMM_WORLD;
 
   if ((ret = MPI_Comm_rank (comm, &iam)) != MPI_SUCCESS)
@@ -4715,7 +4749,7 @@ int GPTLquery (const char *timername,
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -4783,7 +4817,7 @@ int GPTLquerycounters (const char *timername,
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -4850,7 +4884,7 @@ int GPTLget_wallclock (const char *timername,
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -4922,7 +4956,7 @@ int GPTLstartstop_vals (const char *timername, /* timer name */
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -4939,7 +4973,7 @@ int GPTLstartstop_vals (const char *timername, /* timer name */
 
   if (ptr) {
     /*
-    ** The timer already exists. If add_count is > 0, then increment the 
+    ** The timer already exists. If add_count is > 0, then increment the
     ** count and update the time stamp. Then let control jump to the point where
     ** wallclock settings are adjusted.
     */
@@ -4971,7 +5005,7 @@ int GPTLstartstop_vals (const char *timername, /* timer name */
       ptr->count = 0;
     }
 
-    /* 
+    /*
     ** Minor mod: Subtract the overhead of the above start/stop call, before
     ** adding user input
     */
@@ -5035,7 +5069,7 @@ int GPTLstartstop_valsf (const char *timername,  /* timer name */
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -5052,7 +5086,7 @@ int GPTLstartstop_valsf (const char *timername,  /* timer name */
 
   if (ptr) {
     /*
-    ** The timer already exists. If add_count is > 0, then increment the 
+    ** The timer already exists. If add_count is > 0, then increment the
     ** count and update the time stamp. Then let control jump to the point where
     ** wallclock settings are adjusted.
     */
@@ -5084,7 +5118,7 @@ int GPTLstartstop_valsf (const char *timername,  /* timer name */
       ptr->count = 0;
     }
 
-    /* 
+    /*
     ** Minor mod: Subtract the overhead of the above start/stop call, before
     ** adding user input
     */
@@ -5148,7 +5182,7 @@ int GPTLget_eventvalue (const char *timername,
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -5771,7 +5805,7 @@ Timer *GPTLgetentry (const char *timername)
 
   /*
   ** If prefix string is defined, prepend it to timername
-  ** and assign the name pointer to the new string. 
+  ** and assign the name pointer to the new string.
   ** Otherwise assign the name pointer to the original string.
   */
 
@@ -5976,7 +6010,7 @@ static void print_threadmapping (FILE *fp)
 static int serial_region ()
 {
 
-  /* 
+  /*
   ** This test is more robust than 'omp_in_parallel', which is true
   ** in a parallel region when only one thread is active, which may
   ** not be thread 0. Other active thread teams also will not be
@@ -6239,7 +6273,7 @@ static void print_threadmapping (FILE *fp)
 
 /*
 ** serial_region: determine whether in a serial or parallel region
-** 
+**
 ** Not currently implemented (or even defined) when using PTHREADS/
 ** It is an error if this is ever called.
 **

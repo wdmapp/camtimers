@@ -34,6 +34,7 @@ module perf_mod
 #ifdef HAVE_MPI
 #include <mpif.h>
 #endif
+#include <perfstubs_api/timer_f.h>
    save
 
 !-----------------------------------------------------------------------
@@ -733,17 +734,17 @@ contains
 
       write(cdetail,'(i2.2)') cur_timing_detail
       str_length = min(SHR_KIND_CM-3,len_trim(event))
-      ierr = GPTLstart(event(1:str_length)//'_'//cdetail)
+      ierr = GPTLstart(event(1:str_length)//'_'//cdetail//CHAR(0))
 
    else
 
       str_length = min(SHR_KIND_CM,len_trim(event))
-      ierr = GPTLstart(event(1:str_length))
+      ierr = GPTLstart(event(1:str_length)//CHAR(0))
 
 !pw   if ( present (handle) ) then
 !pw      ierr = GPTLstart_handle(event, handle)
 !pw   else
-!pw      ierr = GPTLstart(event)
+!pw      ierr = GPTLstart(event//CHAR(0))
 !pw   endif
 
    endif
@@ -810,17 +811,17 @@ contains
 
       write(cdetail,'(i2.2)') cur_timing_detail
       str_length = min(SHR_KIND_CM-3,len_trim(event))
-      ierr = GPTLstop(event(1:str_length)//'_'//cdetail)
+      ierr = GPTLstop(event(1:str_length)//'_'//cdetail//CHAR(0))
 
    else
 
       str_length = min(SHR_KIND_CM,len_trim(event))
-      ierr = GPTLstop(event(1:str_length))
+      ierr = GPTLstop(event(1:str_length)//CHAR(0))
 
 !pw   if ( present (handle) ) then
 !pw      ierr = GPTLstop_handle(event, handle)
 !pw   else
-!pw      ierr = GPTLstop(event)
+!pw      ierr = GPTLstop(event//CHAR(0))
 !pw   endif
 
    endif
@@ -986,14 +987,14 @@ contains
 
       write(cdetail,'(i2.2)') cur_timing_detail
       str_length = min(SHR_KIND_CM-3,len_trim(event))
-      ierr = GPTLstart(event(1:str_length)//'_'//cdetail)
+      ierr = GPTLstart(event(1:str_length)//'_'//cdetail//CHAR(0))
       ierr = GPTLstart_virtual(event(1:str_length)//'_'//cdetail, &
              l_threadid)
 
    else
 
       str_length = min(SHR_KIND_CM,len_trim(event))
-      ierr = GPTLstart(event(1:str_length))
+      ierr = GPTLstart(event(1:str_length)//CHAR(0))
       ierr = GPTLstart_virtual(event(1:str_length), l_threadid)
 
 !pw   if ( present (handle) ) then
@@ -1056,13 +1057,13 @@ contains
       str_length = min(SHR_KIND_CM-3,len_trim(event))
       ierr = GPTLstop_virtual(event(1:str_length)//'_'//cdetail, &
              l_threadid)
-      ierr = GPTLstop(event(1:str_length)//'_'//cdetail)
+      ierr = GPTLstop(event(1:str_length)//'_'//cdetail//CHAR(0))
 
    else
 
       str_length = min(SHR_KIND_CM,len_trim(event))
       ierr = GPTLstop_virtual(event(1:str_length), l_threadid)
-      ierr = GPTLstop(event(1:str_length))
+      ierr = GPTLstop(event(1:str_length)//CHAR(0))
 
 !pw   if ( present (handle) ) then
 !pw      ierr = GPTLstop_handle_accel(event, l_threadid, handle)
@@ -1377,6 +1378,8 @@ contains
 !-----------------------------------------------------------------------
 !
    if (.not. timing_initialized) return
+
+   PERFSTUBS_DUMP_DATA()
 
    call t_startf("t_prf")
 !$OMP MASTER
@@ -1699,6 +1702,8 @@ contains
        return
     endif
 
+    PERFSTUBS_INITIALIZE()
+
 !$OMP MASTER
     if ( present(MaxThreads) ) then
        num_threads = MaxThreads
@@ -1984,6 +1989,7 @@ contains
 !
    if (.not. timing_initialized) return
 
+   PERFSTUBS_FINALIZE()
 !$OMP MASTER
    ierr = GPTLfinalize()
    timing_initialized = .false.
