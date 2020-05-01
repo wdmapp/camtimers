@@ -2,13 +2,12 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(Camtimers)
-ENABLE_LANGUAGE(C Fortran)
-set(Fortran_FORMAT FREE)
+enable_language(C Fortran)
 
 find_package(MPI REQUIRED)
 find_package(OpenMP)
 
-# CLone the perfstubs repo if it doesn't exist
+# Clone the perfstubs repo if it doesn't exist
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/perfstubs/CMakeLists.txt")
 include(cmake/GitUtils.cmake)
@@ -61,4 +60,3 @@ install (FILES ${CMAKE_BINARY_DIR}/perf_utils.mod DESTINATION include)
 # provide under CAMTIMERS::CAMTIMERS name
 add_library(CAMTIMERS::CAMTIMERS INTERFACE IMPORTED GLOBAL)
 target_link_libraries(CAMTIMERS::CAMTIMERS INTERFACE timers)
-
