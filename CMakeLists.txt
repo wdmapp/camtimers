@@ -4,6 +4,14 @@ cmake_minimum_required(VERSION 3.12)
 project(Camtimers)
 enable_language(C Fortran)
 
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  include(CheckFortranCompilerFlag)
+  check_fortran_compiler_flag("-fallow-argument-mismatch" _flag)
+  if (_flag)
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${_flag}")
+  endif()
+endif()
+
 find_package(MPI REQUIRED)
 find_package(OpenMP)
 
