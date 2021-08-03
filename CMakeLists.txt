@@ -12,6 +12,11 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   endif()
 endif()
 
+# If using the cray fortran wrapper, force lowercase module names
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "Cray")
+    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ef")
+endif()
+
 find_package(MPI REQUIRED)
 find_package(OpenMP)
 
