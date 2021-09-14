@@ -157,7 +157,7 @@ module perf_mod
 
    logical, parameter :: def_perf_add_detail = .false.         ! default
    logical, private   :: perf_add_detail = def_perf_add_detail
-                         ! flag indicating whether to add the current 
+                         ! flag indicating whether to add the current
                          ! detail level as a suffix to the timer name.
                          ! This requires that even t_startf/t_stopf
                          ! and t_accel_startf/t_accel_stopf calls
@@ -866,7 +866,7 @@ contains
 !---------------------------Local workspace-----------------------------
 !
    integer  ierr                          ! GPTL error return
-   integer  str_length, i                 ! support for adding 
+   integer  str_length, i                 ! support for adding
                                           !  detail suffix
    character(len=2) cdetail               ! char variable for detail
    integer  callcnt                       ! call count increment
@@ -947,7 +947,7 @@ contains
    subroutine t_accel_startf(event, accelid, handle)
 !-----------------------------------------------------------------------
 ! Purpose: Start an event timer for launching a task on an accelerator.
-!          Also create event timer to hold time spent on accelerator, 
+!          Also create event timer to hold time spent on accelerator,
 !          using accelid as a virtual thread id.
 ! Author: P. Worley and S. Abbott.
 !-----------------------------------------------------------------------
@@ -1639,7 +1639,7 @@ contains
    logical, optional,  intent(IN) :: MasterTask      ! If MPI master task
    integer, optional,  intent(IN) :: MaxThreads      ! maximum number of threads
                                                      !  used by components
-   integer, optional,  intent(IN) :: MaxAccelerators ! maximum number of 
+   integer, optional,  intent(IN) :: MaxAccelerators ! maximum number of
                                                      !  accelerators used by a
                                                      !  process
 !

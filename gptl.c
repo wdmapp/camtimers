@@ -3865,7 +3865,7 @@ int GPTLpr_summary_file (int comm,
   FILE *fp = 0;                    /* output file */
 
   int count;                       /* number of timers */
-  Summarystats *storage;           /* storage for data from all timers */
+  Summarystats *storage = NULL;    /* storage for data from all timers */
 
   int x;                           /* pointer increment */
   int k;                           /* counter */
@@ -4507,6 +4507,7 @@ static int ncmp( const void *pa, const void *pb )
     return -1;
   /* if( *x == *y ) */
   GPTLerror("%s: shared memory address between timers\n", thisfunc);
+  return 0;
 }
 
 /*

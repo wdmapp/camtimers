@@ -72,7 +72,7 @@ void GPTLset_abort_on_error (bool val)
 
 void *GPTLallocate (const int nbytes)
 {
-  void *ptr;
+  void *ptr = NULL;
 
   if ( nbytes <= 0 || ! (ptr = malloc (nbytes)))
     (void) GPTLerror ("GPTLallocate: malloc failed for %d bytes\n", nbytes);
