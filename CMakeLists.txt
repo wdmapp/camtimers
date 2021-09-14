@@ -26,11 +26,9 @@ endif()
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
 # Allow the user to disable MPI support
-if (NOT DEFINED CAMTIMERS_USE_MPI)
-    set (CAMTIMERS_USE_MPI ON)
-endif ()
+option(CAMTIMERS_USE_MPI "Build camtimers with MPI" ON)
 if (CAMTIMERS_USE_MPI)
-    find_package(MPI)
+    find_package(MPI REQUIRED)
 endif ()
 find_package(OpenMP)
 
