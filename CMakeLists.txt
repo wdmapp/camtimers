@@ -73,11 +73,6 @@ add_library(timers
 
 if (MPI_FOUND)
     target_compile_definitions(timers PRIVATE HAVE_MPI )
-endif (MPI_FOUND)
-
-target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE LINUX PERFSTUBS_USE_TIMERS)
-
-if (MPI_FOUND)
     target_link_libraries(timers PUBLIC MPI::MPI_C global_settings)
 endif (MPI_FOUND)
 
@@ -86,6 +81,7 @@ if(OpenMP_FOUND)
     target_link_libraries(timers PRIVATE OpenMP::OpenMP_Fortran)
 endif(OpenMP_FOUND)
 
+target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE LINUX PERFSTUBS_USE_TIMERS)
 target_include_directories(timers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/perfstubs)
 
 install(TARGETS timers)
