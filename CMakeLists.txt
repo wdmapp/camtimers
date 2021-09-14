@@ -6,13 +6,30 @@ enable_language(C Fortran)
 
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   include(CheckFortranCompilerFlag)
-  check_fortran_compiler_flag("-fallow-argument-mismatch" _flag)
+  check_fortran_compiler_flag("-Wno-argument-mismatch" _flag)
   if (_flag)
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${_flag}")
+  else()
+    check_fortran_compiler_flag("-fallow-argument-mismatch" _flag)
+    if (_flag)
+        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${_flag}")
+    endif()
   endif()
 endif()
 
-find_package(MPI REQUIRED)
+# If using the cray fortran wrapper, force lowercase module names
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "Cray")
+    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ef")
+endif()
+
+#set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Wall")
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+
+# Allow the user to disable MPI support
+option(CAMTIMERS_USE_MPI "Build camtimers with MPI" ON)
+if (CAMTIMERS_USE_MPI)
+    find_package(MPI REQUIRED)
+endif ()
 find_package(OpenMP)
 
 # Clone the perfstubs repo if it doesn't exist
@@ -52,12 +69,17 @@ add_library(timers
   perf_mod.F90
   perf_utils.F90)
 
-target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE HAVE_MPI LINUX PERFSTUBS_USE_TIMERS)
-target_link_libraries(timers PUBLIC MPI::MPI_C global_settings)
+if (MPI_FOUND)
+    target_compile_definitions(timers PRIVATE HAVE_MPI )
+    target_link_libraries(timers PUBLIC MPI::MPI_C global_settings)
+endif (MPI_FOUND)
+
 if(OpenMP_FOUND)
     target_link_libraries(timers PRIVATE OpenMP::OpenMP_C)
     target_link_libraries(timers PRIVATE OpenMP::OpenMP_Fortran)
 endif(OpenMP_FOUND)
+
+target_compile_definitions(timers PRIVATE FORTRANUNDERSCORE LINUX PERFSTUBS_USE_TIMERS)
 target_include_directories(timers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/perfstubs)
 
 install(TARGETS timers)
